@@ -1,34 +1,36 @@
-version: '3'
+import pandas as pd
+import psycopg2
+import os
 
-services:
-  postgres:
-    image: postgres:latest
-    environment:
-      POSTGRES_DB: your_database_name
-      POSTGRES_USER: your_username
-      POSTGRES_PASSWORD: your_password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+DB_HOST = os.environ.get('DB_HOST')
+DB_NAME = os.environ.get('DB_NAME')
+DB_USER = os.environ.get('DB_USER')
+DB_PASS = os.environ.get('DB_PASS')
 
-  python:
-    image: python:3.9
-    volumes:
-      - ./import_data.py:/app/import_data.py
-      - ./your_file.xlsx:/app/your_file.xlsx
-    depends_on:
-      - postgres
-    command: >
-      sh -c "
-      pip install pandas psycopg2 &&
-      python /app/import_data.py
-      "
-    environment:
-      - DB_HOST=postgres
-      - DB_NAME=your_database_name
-      - DB_USER=your_username
-      - DB_PASS=your_password
+EXCEL_FILE_PATH = '/app/your_file.xlsx'
 
-volumes:
-  postgres_data:
+df = pd.read_excel(EXCEL_FILE_PATH)
+
+conn = psycopg2.connect(
+    host=DB_HOST,
+    database=DB_NAME,
+    user=DB_USER,
+    password=DB_PASS
+)
+cursor = conn.cursor()
+
+columns = ','.join(df.columns)
+create_table_query = f"CREATE TABLE your_table_name ({columns} TEXT);"
+cursor.execute(create_table_query)
+conn.commit()
+
+for row in df.itertuples(index=False):
+    placeholders = ','.join(['%s'] * len(row))
+    insert_query = f"INSERT INTO your_table_name ({columns}) VALUES ({placeholders});"
+    cursor.execute(insert_query, row)
+    conn.commit()
+
+cursor.close()
+conn.close()
+
+print("Data imported successfully!")
